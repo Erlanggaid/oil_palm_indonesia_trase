@@ -1,0 +1,155 @@
+---
+title: "Oil Palm Mill Indonesia"
+author: "Source: Trase"
+date: "2025-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r include=FALSE}
+# ── 1. Install / load packages ───────────────────────────────────────────────
+if (!require("dplyr"))           install.packages("dplyr")
+if (!require("stringr"))         install.packages("stringr")
+if (!require("leaflet"))         install.packages("leaflet")
+if (!require("leaflet.extras"))  install.packages("leaflet.extras")
+if (!require("leafem"))          install.packages("leafem")
+if (!require("htmltools"))       install.packages("htmltools")
+if (!require("htmlwidgets"))     install.packages("htmlwidgets")
+if (!require("RColorBrewer"))    install.packages("RColorBrewer")
+
+library(dplyr)
+library(stringr)
+library(leaflet)
+library(leaflet.extras)
+library(leafem)
+library(htmltools)
+library(htmlwidgets)
+library(RColorBrewer)
+```
+
+```{r echo=FALSE}
+# ── 1. Load Packages ────────────────────────────────────────────────────────
+library(leaflet)
+library(leaflet.extras)
+library(dplyr)
+library(htmltools)
+
+# ── 2. Load and Prep Data ───────────────────────────────────────────────────
+# Reading the uploaded CSV
+palm_oil <- read.csv("palm_oil.csv", stringsAsFactors = FALSE)
+
+# Clean and handle missing values
+palm_oil <- palm_oil %>%
+  mutate(
+    lat = as.numeric(latitude),
+    lng = as.numeric(longitude),
+    capacity = as.numeric(capacity_tonnes_ffb_hour),
+    # Pre-formatting for display labels
+    group_val = ifelse(is.na(group) | group == "", "Unknown", group),
+    company_val = ifelse(is.na(company) | company == "", "Unknown", company),
+    mill_val = ifelse(is.na(mill_name) | mill_name == "", "Unnamed Mill", mill_name),
+    status_val = ifelse(is.na(status) | status == "", "Unknown", status),
+    year_val = ifelse(is.na(earliest_year_of_existence), "N/A", earliest_year_of_existence),
+    source_val = ifelse(is.na(earliest_year_of_existence_source) | earliest_year_of_existence_source == "", "N/A", earliest_year_of_existence_source)
+  ) %>%
+  filter(!is.na(lat) & !is.na(lng))
+
+# ── 3. Define Color Palette for Capacity ────────────────────────────────────
+# Mapping capacity from 0 to 120; points with NA capacity are colored grey (#808080)
+pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain = c(0, 120),
+  na.color = "#808080"
+)
+
+# ── 4. Build Popup Content ──────────────────────────────────────────────────
+palm_oil$popup_content <- paste0(
+  "<div style='font-family: sans-serif; min-width: 250px;'>",
+  "<h4 style='margin: 0; color: #1b5e20;'>", palm_oil$mill_val, "</h4>",
+  "<hr style='margin: 5px 0;'>",
+  "<b>Group:</b> ", palm_oil$group_val, "<br/>",
+  "<b>Company:</b> ", palm_oil$company_val, "<br/>",
+  "<b>Capacity (tonnes/hr):</b> ", ifelse(is.na(palm_oil$capacity), "Unknown", palm_oil$capacity), "<br/>",
+  "<b>Status:</b> ", palm_oil$status_val, "<br/>",
+  "<b>Est. Year:</b> ", palm_oil$year_val, "<br/>",
+  "<div style='margin-top: 8px; font-size: 11px; color: #555; border-top: 1px solid #eee; padding-top: 5px;'>",
+  "<b>Source:</b> ", palm_oil$source_val, "</div>",
+  "</div>"
+)
+
+# ── 5. Build Map ─────────────────────────────────────────────────────────────
+m <- leaflet(palm_oil, width = "100%", height = "100vh", options = leafletOptions(zoomControl = TRUE)) %>%
+  # Base Map Layers
+  addProviderTiles(providers$CartoDB.Positron, group = "Street Map") %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") %>%
+  setView(lng = 118, lat = -2, zoom = 5) %>%
+  
+  # Add Mill Markers
+  addCircleMarkers(
+    lng = ~lng, lat = ~lat,
+    radius = 2,
+    fillColor = ~pal(capacity),
+    color = "white",
+    weight = 1,
+    fillOpacity = 0.8,
+    popup = ~popup_content,
+    label = ~mill_val,
+    group = "Mills"
+  ) %>%
+  
+  # ── 6. UI Controls & Legends ──────────────────────────────────────────────
+   # Legend 1: Unknown (Outside/Separate box)
+  addLegend(
+    "bottomright",
+    colors = "#808080",
+    labels = "Unknown Capacity (tonnes FFB/hr)",
+    title = NULL,
+    opacity = 1
+  ) %>% 
+  
+  # Legend 2: Main Capacity Scale (0 - 120)
+  addLegend(
+    "bottomright",
+    pal = pal,
+    values = c(0, 120),
+    title = "Capacity (tonnes FFB/hr)",
+    opacity = 1
+  ) %>%
+  
+  # Mini Map (Bottom Left)
+  addMiniMap(
+    position = "bottomleft",
+    tiles = providers$CartoDB.Positron,
+    toggleDisplay = TRUE,
+    minimized = FALSE
+  ) %>%
+  
+  # Layer Control
+  addLayersControl(
+    baseGroups = c("Street Map", "Satellite"),
+    overlayGroups = "Mills",
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  
+  # Additional Utilities
+  addFullscreenControl() %>%
+  addSearchFeatures(targetGroups = "Mills", options = searchFeaturesOptions(zoom = 12)) %>%
+  leafem::addMouseCoordinates()
+
+# Render Map
+m
+
+
+# To save as a clean, full-screen standalone file
+saveWidget(m, "index.html", selfcontained = TRUE)
+```
+
+
+```{r}
+
+```
+
